@@ -32,6 +32,8 @@
 #import "FBMMRecordTweakModel.h"
 #endif
 
+#import <objc/runtime.h>
+
 static dispatch_group_t _mmrecord_request_group = nil;
 static dispatch_semaphore_t _mmrecord_request_semaphore = nil;
 static BOOL _mmrecord_batch_requests = NO;
@@ -86,6 +88,8 @@ NSString * const MMRecordAttributeAlternateNameKey = @"MMRecordAttributeAlternat
 // It provides support for convenience functions for context merging as well as obtaining an
 // `NSEntityDescription` object for a given class name.
 @interface NSManagedObjectContext (MMRecord)
+
+@property BOOL shouldSkipValidation;
 
 - (void)MMRecord_startObservingWithContext:(NSManagedObjectContext*)context;
 - (void)MMRecord_stopObservingWithContext:(NSManagedObjectContext*)context;
@@ -349,6 +353,7 @@ NSString * const MMRecordAttributeAlternateNameKey = @"MMRecordAttributeAlternat
     if (options.automaticallyPersistsRecords == NO) {
         if ([backgroundContext respondsToSelector:@selector(setParentContext:)]) {
             [backgroundContext setParentContext:mainContext];
+            backgroundContext.shouldSkipValidation = YES;
         }
     } else {
         [backgroundContext setPersistentStoreCoordinator:mainStoreCoordinator];
@@ -685,6 +690,10 @@ NSString * const MMRecordAttributeAlternateNameKey = @"MMRecordAttributeAlternat
     return YES;
 }
 
+-(BOOL)validateValue:(__autoreleasing id *)value forKey:(NSString *)key error:(NSError *__autoreleasing *)error {
+    if (self.managedObjectContext.shouldSkipValidation) return YES;
+    return [super validateValue:value forKey:key error:error];
+}
 
 #pragma mark - Parsing Helper Methods
 
@@ -1046,6 +1055,16 @@ NSString * const MMRecordAttributeAlternateNameKey = @"MMRecordAttributeAlternat
     }
     
     return nil;
+}
+
+#pragma mark - Skip validation on working context
+
+-(BOOL)shouldSkipValidation {
+    return [objc_getAssociatedObject(self, @selector(shouldSkipValidation)) boolValue];
+}
+
+-(void)setShouldSkipValidation:(BOOL)shouldSkipValidation {
+    objc_setAssociatedObject(self, @selector(shouldSkipValidation), @(shouldSkipValidation), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 @end
